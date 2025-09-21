@@ -1,0 +1,39 @@
+---
+- name: CIS Benchmark Compliance Scan
+  hosts: all
+  become: yes
+  vars:
+    cis_failures: []
+  tasks:
+    - name: "1.1.1.1 Ensure mounting of cramfs filesystems is disabled (Scored)"
+      command: modprobe -n -v cramfs
+      register: cramfs_modprobe
+      changed_when: false
+      failed_when: cramfs_modprobe.stdout != "install /bin/true\n"
+
+    - name: "1.1.1.2 Ensure mounting of freevxfs filesystems is disabled (Scored)"
+      command: modprobe -n -v freevxfs
+      register: freevxfs_modprobe
+      changed_when: false
+      failed_when: freevxfs_modprobe.stdout != "install /bin/true\n"
+
+    - name: "5.2.1 Ensure permissions on /etc/ssh/sshd_config are configured (Scored)"
+      file:
+        path: /etc/ssh/sshd_config
+        mode: '0600'
+        owner: root
+        group: root
+      check_mode: yes
+      register: sshd_config_perms
+
+    - name: "Report failure for 5.2.1"
+      set_fact:
+        cis_failures: "{{ cis_failures + ['5.2.1 - Incorrect permissions on /etc/ssh/sshd_config'] }}"
+      when: sshd_config_perms is changed
+
+  post_tasks:
+    - name: Generate Compliance Report
+      debug:
+        msg: "CIS Compliance Scan Complete. Failures: {{ cis_failures }}"
+      # In production, you would write this to a file or send it to your SIEM
+      # e.g., copy: content="{{ cis_failures | to_nice_json }}" dest="/var/log/cis_scan_{{ ansible_hostname }}.json"
